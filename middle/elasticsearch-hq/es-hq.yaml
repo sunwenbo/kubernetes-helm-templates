@@ -1,0 +1,130 @@
+---
+# Source: kubernetes/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: yidian-prod
+  name: ops-elasticsearch-hq
+  labels:
+    app: ops-elasticsearch-hq
+spec:
+  clusterIP: None
+  ports:
+  - port: 5000
+    targetPort: 5000
+    protocol: TCP
+    name: serverport
+  selector:
+    app: ops-elasticsearch-hq
+---
+# Source: kubernetes/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ops-elasticsearch-hq
+  namespace: yidian-prod
+  labels:
+    app: ops-elasticsearch-hq
+spec:
+  selector:
+    matchLabels:
+      app: ops-elasticsearch-hq
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 10%
+      maxUnavailable: 25%
+  template:
+    metadata:
+      annotations:
+        rollme: "1rzNr"
+      labels:
+        app.kubernetes.io/managed-by: Helm
+        meta.helm.sh/release-namespace:  yidian-prod
+        meta.helm.sh/release-name: "yidian-prod-ops-elasticsearch-hq"
+        app: ops-elasticsearch-hq
+        version: "3.5.12"
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node_netcard_wan
+                operator: In
+                values:
+                - "false"
+              - key: node_out_internet
+                operator: In
+                values:
+                - "false"
+      terminationGracePeriodSeconds: 3
+      dnsPolicy: Default
+      containers:
+      - name: ops-elasticsearch-hq
+        #image: "harbor.int.yidian-inc.com/sre-project/ops-elasticsearch-hq-17-image:latest"
+        image: "harbor.int.yidian-inc.com/kubernetes_1_18_9/elasticsearch-hq:3.5.12"
+        command: ["supervisord", "-c","/etc/supervisor/supervisord.conf"]
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: serverport
+          containerPort: 5000
+          protocol: TCP
+        resources:
+          limits:
+            cpu: 1
+            memory: 512Mi
+          requests:
+            cpu: 1
+            memory: 512Mi
+        readinessProbe:
+          tcpSocket:
+            port: 5000
+          initialDelaySeconds: 20
+          periodSeconds: 5
+          failureThreshold: 30
+          successThreshold: 1
+          timeoutSeconds: 1
+        livenessProbe:
+          tcpSocket:
+            port: 5000
+          initialDelaySeconds: 20
+          periodSeconds: 5
+          failureThreshold: 30
+          successThreshold: 1
+          timeoutSeconds: 1
+        volumeMounts:
+        - name: timezone
+          mountPath: /etc/localtime
+        lifecycle:
+          #预启动
+          postStart:
+            exec:
+              command: ["/bin/echo", "-e", "postStart is doing nothing"]
+          #预停止
+          preStop:
+            exec:
+              command: ["sleep","5"]
+        env:
+        #service_env_locate don't delete
+        - name: K8S_SERVICE
+          value: ops-elasticsearch-hq
+        - name: K8S_ENV
+          value: prod
+        - name: K8S_NAMESPACE
+          value: yidian-prod
+        - name: K8S_CLUSTER
+          value: core
+        - name: K8S_YIDIAN_LOCAL_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
+        - name: YIDIAN_LOCAL_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+      volumes:
+      - name: timezone
+        hostPath:
+          path: /usr/share/zoneinfo/Asia/Shanghai

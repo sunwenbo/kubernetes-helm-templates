@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: yidian-prod
+  name: register-server
+  labels:
+    service: register-server
+spec:
+  clusterIP: None
+  type: ClusterIP
+  ports:
+    - port: 8000
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    service: register-server

@@ -1,0 +1,17 @@
+# Source: kubernetes/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: yidian-video
+  name: contech-video-transcode
+  labels:
+    app: contech-video-transcode
+spec:
+  clusterIP: None
+  ports:
+  - port: 5071
+    targetPort: 5071
+    protocol: TCP
+    name: serverport
+  selector:
+    app: contech-video-transcode

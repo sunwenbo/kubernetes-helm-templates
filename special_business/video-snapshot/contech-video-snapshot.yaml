@@ -1,0 +1,161 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+  creationTimestamp: 2021-04-13T03:40:23Z
+  generation: 31
+  labels:
+    app: contech-video-snapshot
+    env: prod
+    gitgroup: video
+    gitproj: contech-video-snapshot
+    version: "14"
+  name: contech-video-snapshot
+  namespace: yidian-video
+  resourceVersion: "2919686573"
+  selfLink: /apis/apps/v1/namespaces/video/deployments/contech-video-snapshot-prod-14
+  uid: fa9a8277-9c09-11eb-af82-1402ec8245ec
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: contech-video-snapshot
+      env: prod
+      gitgroup: video
+      gitproj: contech-video-snapshot
+      version: "14"
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        custom.yidian-inc.com/outside: "false"
+      creationTimestamp: null
+      labels:
+        app: contech-video-snapshot
+        env: prod
+        gitgroup: video
+        gitproj: contech-video-snapshot
+        suspend: "false"
+        version: "14"
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: business
+                operator: In
+                values:
+                - public
+      containers:
+      - command:
+        - sh
+        - /home/services/snapshot-process/bin/deploy.sh
+        - prod
+        env:
+        - name: K8S_SERVICE
+          value: contech-video-snapshot
+        - name: K8S_ENV
+          value: prod
+        - name: K8S_NAMESPACE
+          value: video
+        - name: K8S_CLUSTER
+          value: SH
+        - name: K8S_YIDIAN_LOCAL_IP
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: spec.nodeName
+        - name: YIDIAN_LOCAL_IP
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: status.podIP
+        image: docker2.yidian.com:5000/publish/video-snapshot-process-master-14-image:latest
+        imagePullPolicy: IfNotPresent
+        lifecycle:
+          postStart:
+            exec:
+              command:
+              - /bin/echo
+              - -e
+              - postStart is doing nothing
+          preStop:
+            exec:
+              command:
+              - /bin/bash
+              - -c
+              - sleep 2
+        name: contech-video-snapshot
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - /home/services/snapshot-process/bin/check_port_and_done.sh
+            - none
+          failureThreshold: 10
+          initialDelaySeconds: 10
+          periodSeconds: 1
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources:
+          limits:
+            cpu: "3"
+            memory: 4Gi
+          requests:
+            cpu: "3"
+            memory: 4Gi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /home/services/snapshot-process/logs
+          name: app-logs
+      - command:
+        - sh
+        - /etc/filebeat/start.sh
+        env:
+        - name: K8S_SERVICE
+          value: contech-video-snapshot
+        - name: K8S_ENV
+          value: prod
+        - name: K8S_NAMESPACE
+          value: video
+        - name: K8S_CLUSTER
+          value: SH
+        - name: K8S_CRONDELETE
+          value: "true"
+        - name: K8S_CRONDELETE_DAY
+          value: "2"
+        image: docker2.yidian.com:5000/devops/filebeat:6.3.2-3
+        imagePullPolicy: Always
+        name: filebeat
+        resources:
+          limits:
+            cpu: 150m
+            memory: 150Mi
+          requests:
+            cpu: 150m
+            memory: 150Mi
+        securityContext:
+          privileged: true
+          runAsUser: 0
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /log
+          name: app-logs
+      dnsPolicy: Default
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - emptyDir: {}
+        name: app-logs

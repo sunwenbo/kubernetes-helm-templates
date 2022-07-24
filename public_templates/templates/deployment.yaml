@@ -1,0 +1,214 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  {{- if eq .Values.canary.enabled "true" }}
+  name: {{ .Values.service.name }}-canary
+  {{- else }}
+  name: {{ .Values.service.name }}
+  {{- end }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- if eq .Values.canary.enabled "true" }}
+    app: {{ .Values.service.name }}
+    track: canary
+    {{- else }}
+    app: {{ .Values.service.name }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- if eq .Values.canary.enabled "true" }}
+      app: {{ .Values.service.name }}
+      track: canary
+      {{- else }}
+      app: {{ .Values.service.name }}
+      {{- end }}
+  {{- if eq .Values.canary.enabled "true" }}
+  replicas: {{ .Values.canary.replicaCount | default "1"}}
+  {{- else }}
+  replicas: {{ .Values.replicaCount | default "1"}}
+  {{- end }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: {{ .Values.service.maxsurge | default "10%" }}
+      maxUnavailable: {{ .Values.service.maxunavailable | default "25%" }}
+  template:
+    metadata:
+      annotations:
+        rollme: {{ randAlphaNum 5 | quote }}
+      labels:
+        app.kubernetes.io/managed-by: Helm
+        meta.helm.sh/release-namespace:  {{ .Values.namespace }}
+        meta.helm.sh/release-name: "{{ .Values.namespace }}-{{ .Values.service.name }}"
+        {{- if eq .Values.canary.enabled "true" }}
+        app: {{ .Values.service.name }}
+        track: canary
+        version: "{{ .Values.canary.imagetag }}"
+        {{- else }}
+        app: {{ .Values.service.name }}
+        version: "{{ .Values.image.tag }}"
+        {{- end }}
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              {{- range $key, $val := .Values.affinity }}
+              - key: {{ $key }}
+                operator: In
+                values:
+                - "{{ $val }}"
+              {{- end }}
+#{{- if (eq .Values.service.name "contech-image-shower-prod") }}
+#        podAntiAffinity:
+#          requiredDuringSchedulingIgnoredDuringExecution:
+#          - labelSelector:
+#              matchExpressions:
+#              - key: app
+#                operator: In
+#                values:
+#                - {{ .Values.service.name }}
+#            topologyKey: kubernetes.io/hostname
+#{{- end }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      dnsPolicy: Default
+{{- if or (eq .Values.service.name "ads-caifeng-adx") (eq .Values.service.name "ad-ctr-predict-service") (eq .Values.service.name "ad-caifeng-ssp") ( eq .Values.service.name "ad-server-bid-engine-prod") (eq .Values.service.name "ad-against-cheating-k8s") }}
+      initContainers:
+      - name: sysctl
+        image: harbor.int.yidian-inc.com/kubernetes_1_18_9/busybox:v1
+        securityContext:
+          privileged: true
+        command:
+        - sh
+        - -c
+        - sysctl -w net.ipv4.ip_local_port_range='1024 65535' ; sysctl -w net.ipv4.tcp_syncookies='1' ; sysctl -w net.ipv4.tcp_tw_reuse='1' ; sysctl -w net.ipv4.tcp_tw_recycle='1' ; sysctl -w net.ipv4.tcp_fin_timeout='10' ; sysctl -w net.ipv4.tcp_keepalive_time='1800' ; sysctl -w net.ipv4.tcp_keepalive_probes='3' ; sysctl -w net.ipv4.tcp_keepalive_intvl=15 ; sysctl -w net.core.netdev_max_backlog='262144' ; sysctl -w net.ipv4.tcp_max_tw_buckets='10000' ; sysctl -w net.ipv4.tcp_syncookies='1' ; sysctl -w  net.ipv4.tcp_max_syn_backlog='1024' ; sysctl -w net.ipv4.tcp_synack_retries='2' ; sysctl -w net.ipv4.tcp_syn_retries='1'
+{{- end }}
+      containers:
+      - name: {{ .Values.service.name }}
+        {{- if eq .Values.canary.enabled "true" }}
+        image: "{{ .Values.image.repository }}{{ .Values.image.image }}-{{ .Values.canary.imagetag }}-image:latest"
+        {{- else }}
+        image: "{{ .Values.image.repository }}{{ .Values.image.image }}-{{ .Values.image.tag }}-image:latest"
+        {{- end }}
+        command: {{ .Values.service.start_command }}
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: serverport
+          containerPort: {{ .Values.service.port }}
+          protocol: TCP
+        resources:
+{{ toYaml .Values.resources | indent 10 }}
+        {{- if .Values.startupProbe_enabled }}
+        startupProbe:
+{{ toYaml .Values.startupProbe | indent 10 }}
+          initialDelaySeconds: 180
+          periodSeconds: 5
+          failureThreshold: 90
+          successThreshold: 1
+          timeoutSeconds: 1
+        {{- end }}
+        {{- if .Values.readinessProbe_enabled }}
+        readinessProbe:
+{{ toYaml .Values.readinessProbe | indent 10 }}
+          initialDelaySeconds: 20
+          periodSeconds: 5
+          failureThreshold: 30
+          successThreshold: 1
+          timeoutSeconds: 1
+        {{- end }}
+        {{- if .Values.livenessProbe_enabled }}
+        livenessProbe:
+{{ toYaml .Values.livenessProbe | indent 10 }}
+          initialDelaySeconds: 20
+          periodSeconds: 5
+          failureThreshold: 30
+          successThreshold: 1
+          timeoutSeconds: 1
+        {{- end }}
+        volumeMounts:
+        - mountPath: {{ .Values.service.logPath }}
+          name: app-logs
+        - name: timezone
+          mountPath: /etc/localtime
+        {{- if .Values.Pvc.enabled | default false }}
+        - mountPath: {{ .Values.Pvc.path }}
+          name: gluster-volume
+        {{- end }}
+        lifecycle:
+          #预启动
+          postStart:
+            exec:
+              command: {{ .Values.lifecycle.poststart_exec | default "['/bin/echo','-e','postStart is doing nothing']"}}
+          #预停止
+          preStop:
+            exec:
+              command: {{ .Values.lifecycle.prestop_exec | default "['/bin/echo','-e','preStop is doing nothing']"}}
+        env:
+        #service_env_locate don't delete
+        - name: K8S_SERVICE
+          value: {{ .Values.service.name }}
+        - name: K8S_ENV
+          value: {{ .Values.service.env }}
+        - name: K8S_NAMESPACE
+          value: {{ .Values.namespace }}
+        - name: K8S_CLUSTER
+          value: {{ .Values.cluster }}
+        - name: Host_name
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: K8S_YIDIAN_LOCAL_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
+        - name: YIDIAN_LOCAL_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        #filebeat:log容器主程序
+      - name: filebeat
+        image: docker2.yidian.com:5000/devops/filebeat:6.3.2-k8ssre
+        #image: {{ .Values.image.filebeat_image }}
+        #imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
+        command: ["sh", "/etc/filebeat/start.sh"]
+        {{- $business := split "-" .Values.service.name }}
+        env:
+        - name: K8S_BUSINESS
+          value: {{ $business._0 }}
+        - name: K8S_SERVICE
+          value: {{ .Values.service.name }}
+        - name: K8S_CRONDELETE
+          value: "{{ .Values.filebeat.crondelete |default true }}"
+        - name: K8S_CRONDELETE_DAY
+          value: "{{ .Values.filebeat.logSaveDay |default 3 }}"
+        securityContext:
+          runAsUser: 0
+          privileged: true
+        resources:
+          limits:
+            cpu: 150m
+            memory: 200Mi
+          requests:
+            cpu: 50m
+            memory: 100Mi
+        volumeMounts:
+        - name: app-logs
+          mountPath: /log
+        - name: filebeat-registry
+          mountPath: /usr/share/filebeat/data
+      volumes:
+      - name: app-logs
+        emptyDir: {}
+      - name: filebeat-registry
+        emptyDir: {}
+      - name: timezone
+        hostPath:
+          path: /usr/share/zoneinfo/Asia/Shanghai
+      {{- if .Values.Pvc.enabled | default false }}
+      - name: gluster-volume
+        persistentVolumeClaim:
+          claimName: {{ .Values.cluster }}-{{ .Values.service.name }}
+      {{- end }}

@@ -1,0 +1,20 @@
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: ingress-codis-fe
+  namespace: yidian-prod
+  annotations:
+    kubernetes.io/ingress.class: ingress-yidian-inc-nginx2
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      access_log syslog:server=devops-nginx-syslog.transfer.v.yidian-inc.com:1514,facility=local7,severity=debug,tag=ingress_codis_fe upstreaminfo;
+      error_log  /var/log/nginx/codis-fe.int.dashboard.com.error.log;
+spec:
+  rules:
+  - host: "codis-fe.int.yidian-inc.com"
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: codis-fe-service
+          servicePort: 8080
+

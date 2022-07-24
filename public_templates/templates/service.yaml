@@ -1,0 +1,31 @@
+{{- if eq .Values.canary.enabled "false" }}
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: {{ .Values.namespace }}
+  name: {{ .Values.service.name }}
+  labels:
+    app: {{ .Values.service.name }}
+{{- if eq .Values.service.prome_monitor_jvm true }}
+  annotations:
+    prometheus.io/port: "{{ .Values.service.port }}"
+    prometheus.io/spring: "true"
+    prometheus.io/path: "/actuator/prometheus"
+{{- end }}
+spec:
+{{- if eq .Values.service.svc_types "clusterIP" }}
+  clusterIP: None
+{{- else if eq .Values.service.svc_types "NodePort" }}
+  type: NodePort
+{{- end }}
+  ports:
+  - port: {{ .Values.service.port }}
+    targetPort: {{ .Values.service.port }}
+{{- if eq .Values.service.svc_types "NodePort" }}
+    nodePort: {{ .Values.service.port }}
+{{- end }}
+    protocol: TCP
+    name: serverport
+  selector:
+    app: {{ .Values.service.name }}
+{{- end }}

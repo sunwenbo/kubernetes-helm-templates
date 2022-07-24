@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: yidian-prod
+  name: codis-fe
+spec:
+  selector:
+    matchLabels:
+      app: codis-fe
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: codis-fe
+    spec:
+      imagePullSecrets:
+      - name: your-registry
+      containers:
+      - name: codis-fe
+        image: harbor.int.yidian-inc.com/codis/codis-fe
+        imagePullPolicy: IfNotPresent
+        command: ["entrypoint.sh"]
+        ports:
+        - containerPort: 8080
+          name: fe
+        livenessProbe:
+          httpGet:
+            path: /
+            port: fe
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /
+            port: fe
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: "4"
+            memory: 2Gi
+          requests:
+            cpu: "1"
+            memory: 100M
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: codis-fe-service
+  namespace: yidian-prod
+  labels:
+    app: codis-fe
+spec:
+  #clusterIP: None
+  type: ClusterIP
+  ports:
+    - port: 8080
+  selector:
+    app: codis-fe

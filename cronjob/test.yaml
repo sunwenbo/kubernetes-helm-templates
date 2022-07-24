@@ -1,0 +1,24 @@
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: hello
+  namespace: cronjob
+spec:
+  failedJobsHistoryLimit: 1
+  successfulJobsHistoryLimit: 1
+  startingDeadlineSeconds: 3600
+  concurrencyPolicy: Replace
+  schedule: "*/5 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: zheli-conjob
+            image: docker2.yidian.com:5000/publish/api0-website-local-branch-3230-image
+            imagePullPolicy: IfNotPresent
+            args:
+            - /usr/bin/php
+            - -f
+            - /home/services/api.go2yd.com/htdocs/Website/script/virtual/Test.php
+          restartPolicy: OnFailure

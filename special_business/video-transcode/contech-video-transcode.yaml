@@ -1,0 +1,101 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: contech-video-transcode04
+  name: contech-video-transcode04
+  namespace: yidian-video
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: contech-video-transcode04
+  strategy:
+    rollingUpdate:
+      maxSurge: 10%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: contech-video-transcode04
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: business
+                operator: In
+                values:
+                - transcode
+      containers:
+      - command:
+        - sh
+        - /home/services/video_transcode/bin/deploy.sh
+        - prod2
+        env:
+        - name: K8S_SERVICE
+          value: contech-video-transcode04
+        - name: K8S_ENV
+          value: prod
+        - name: K8S_NAMESPACE
+          value: yidian-video
+        - name: K8S_CLUSTER
+          value: core
+        - name: K8S_YIDIAN_LOCAL_IP
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: spec.nodeName
+        - name: YIDIAN_LOCAL_IP
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: status.podIP
+        image: docker2.yidian.com:5000/publish/video-video_transcode-master-107-image:latest
+        imagePullPolicy: IfNotPresent
+        lifecycle:
+          postStart:
+            exec:
+              command:
+              - /bin/echo
+              - -e
+              - postStart is doing nothing
+          preStop:
+            exec:
+              command:
+              - /bin/bash
+              - -c
+              - ps aux | grep -v 'grep' | grep 'contech-video-transcode-1.0-SNAPSHOT' | awk
+                '{print $2}'| xargs kill
+        name: contech-video-transcode04
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - /home/services/video_transcode/bin/check_port_and_done.sh
+            - none
+          failureThreshold: 10
+          initialDelaySeconds: 10
+          periodSeconds: 1
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources:
+          limits:
+            cpu: "3"
+            memory: 4Gi
+          requests:
+            cpu: "3"
+            memory: 4Gi
+        volumeMounts:
+        - mountPath: /home/services/video_transcode/logs
+          name: app-logs
+      dnsPolicy: Default
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - emptyDir: {}
+        name: app-logs

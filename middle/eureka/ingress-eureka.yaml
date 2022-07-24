@@ -1,0 +1,20 @@
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: ingress-eureka
+  namespace: yidian-prod
+  annotations:
+    kubernetes.io/ingress.class: ingress-yidian-inc-nginx2
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      access_log syslog:server=devops-nginx-syslog.transfer.v.yidian-inc.com:1514,facility=local7,severity=debug,tag=ingress_eureka upstreaminfo;
+      error_log  /var/log/nginx/eureka.int.yidian-inc.com.error.log;
+spec:
+  rules:
+  - host: "eureka.int.yidian-inc.com"
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: register-server
+          servicePort: 8000
+

@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: yidian-prod
+  name: logstash-ug
+spec:
+  selector:
+    matchLabels:
+      app: logstash-ug
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: logstash-ug
+    spec:
+      dnsPolicy: Default
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: business
+                operator: In
+                values:
+                - public
+              - key: high_concurrent
+                operator: In
+                values:
+                - "false"
+              - key: node_netcard_wan
+                operator: In
+                values:
+                - "false"
+              - key: node_out_internet
+                operator: In
+                values:
+                - "false"
+      containers:
+      - name: logstash-ug
+        image: harbor.int.yidian-inc.com/kubernetes_1_18_9/logstash-ug-1-image
+        imagePullPolicy: IfNotPresent
+        command: ["bin/logstash","-f","config/pipeline","--http.host=0.0.0.0","--http.port=9600"]
+        ports:
+        - containerPort: 9600
+          name: logstash
+          protocol: TCP
+        livenessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - ps uax |grep -v grep |grep logstash
+          failureThreshold: 30
+          initialDelaySeconds: 20
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c 
+            - ps uax |grep -v grep |grep logstash
+          failureThreshold: 30
+          initialDelaySeconds: 20
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources:
+          limits:
+            cpu: "2"
+            memory: 10Gi
+          requests:
+            cpu: "2"
+            memory: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: logstash-ug
+  namespace: yidian-prod
+  labels:
+    app: logstash-ug
+spec:
+  #clusterIP: None
+  type: ClusterIP
+  ports:
+    - port: 9600
+  selector:
+    app: logstash-ug
