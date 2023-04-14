@@ -1,4 +1,4 @@
-{{- if and .Values.hpa.enabled ( eq .Values.canary.enabled "false") }}
+{{- if and (eq .Values.hpa.enabled true) ( eq .Values.canary.enabled "false") }}
 apiVersion: autoscaling/v2beta2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -17,10 +17,12 @@ spec:
       target:
         type: Utilization
         averageUtilization: {{ .Values.hpa.cpuaverageUtilization }}
+{{- if (eq .Values.hpa.mem_enabled true)}}
   - type: Resource
     resource:
       name: memory
       target:
         type: Utilization
         averageUtilization: {{ .Values.hpa.memaverageUtilization }}
+{{- end }}
 {{ end }}
